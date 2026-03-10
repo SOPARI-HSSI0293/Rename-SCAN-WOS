@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto-Rename PDF (Hanwa System)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        #drop-zone.dragover {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+        }
+        .font-mono { font-family: 'ui-monospace', 'Cascadia Code', monospace; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .gradient-text-green {
+            background: linear-gradient(to right, #4ade80, #22c55e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex flex-col">
+
+    <div class="max-w-5xl mx-auto w-full flex-grow space-y-8">
+        <!-- Header Section -->
+        <div class="text-center space-y-4 pt-4 flex flex-col items-center">
+            <!-- Logo Hanwa -->
+            <div class="mb-2">
+                <img src="https://deliveryhanwa.wordpress.com/wp-content/uploads/2025/11/logo-hanwa-2.png" 
+                     alt="Hanwa Logo" 
+                     class="h-16 w-auto object-contain brightness-110"
+                     onerror="this.style.display='none'">
+            </div>
+            
+            <h1 class="text-4xl font-extrabold tracking-tight gradient-text-green">
+                RENAME SCAN WOS HANWA
+            </h1>
+            <p class="text-slate-400 font-medium">==================================================</p>
+        </div>
+
+        <!-- Main Card Group -->
+        <div class="grid grid-cols-1 gap-6">
+            <!-- Drop Zone Card -->
+            <div id="drop-zone" class="glass-card rounded-3xl p-10 border-2 border-dashed border-slate-700 transition-all cursor-pointer group relative overflow-hidden">
+                <input type="file" id="file-input" class="hidden" multiple accept="application/pdf">
+                <div class="relative z-10 flex flex-col items-center space-y-4">
+                    <div class="bg-green-600/20 p-5 rounded-2xl text-green-400 group-hover:scale-110 transition-transform">
+                        <i data-lucide="upload-cloud" size="40"></i>
+                    </div>
+                    <div class="text-center">
+                        <h3 class="text-xl font-bold text-slate-100">Drop PDF Files Here</h3>
+                        <p class="text-slate-400 mt-1">Sistem akan mengekstrak Order No & Packing No secara otomatis</p>
+                    </div>
+                    <div id="loader" class="hidden flex items-center gap-3 text-green-400 font-bold bg-green-400/10 px-4 py-2 rounded-full">
+                        <div class="animate-spin h-4 w-4 border-2 border-green-400 border-t-transparent rounded-full"></div>
+                        Analysing Documents...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Card -->
+            <div class="glass-card rounded-3xl overflow-hidden flex flex-col border border-slate-700">
+                <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-emerald-500/20 text-emerald-400 rounded-lg">
+                            <i data-lucide="layout-list" size="18"></i>
+                        </div>
+                        <h2 class="font-bold text-slate-200 tracking-wide uppercase text-xs">Hasil Pemrosesan</h2>
+                    </div>
+                    <div class="flex gap-3">
+                        <button id="clear-btn" class="text-[11px] font-bold text-slate-500 hover:text-red-400 transition-colors">CLEAR ALL</button>
+                        <button id="zip-btn" class="hidden bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-green-900/20 transition-all active:scale-95">
+                            <i data-lucide="download" size="14"></i> DOWNLOAD ZIP
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-900/50 text-slate-500 uppercase text-[10px] font-bold tracking-widest border-b border-slate-700">
+                                <th class="px-6 py-4">Original File</th>
+                                <th class="px-6 py-4 text-green-400">Order No</th>
+                                <th class="px-6 py-4 text-emerald-400">Packing No (Full)</th>
+                                <th class="px-6 py-4">New Filename</th>
+                                <th class="px-6 py-4 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="result-body" class="divide-y divide-slate-800 font-mono text-[12px]">
+                            <tr id="empty-state">
+                                <td colspan="5" class="px-6 py-16 text-center text-slate-500 italic font-sans">
+                                    No documents processed yet. Drag & drop to start.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Attribution -->
+    <footer class="mt-12 mb-6 text-center space-y-2">
+        <div class="h-[1px] w-40 bg-gradient-to-r from-transparent via-slate-700 to-transparent mx-auto mb-4"></div>
+        <p class="text-slate-500 text-[11px] tracking-[0.2em] font-bold uppercase">
+            RENAME SCAN WOS HANWA - Elaborated by SOPARI-HSSI0293
+        </p>
+        <p class="text-slate-600 text-[9px]">PT. HANWA STEEL SERVICE INDONESIA &copy; 2026</p>
+    </footer>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const resultBody = document.getElementById('result-body');
+        const loader = document.getElementById('loader');
+        const zipBtn = document.getElementById('zip-btn');
+        const clearBtn = document.getElementById('clear-btn');
+
+        let processedFiles = [];
+        lucide.createIcons();
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        clearBtn.addEventListener('click', () => location.reload());
+
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+            document.getElementById('empty-state')?.remove();
+            loader.classList.remove('hidden');
+
+            for (const file of files) {
+                if (file.type === 'application/pdf') {
+                    await processPDF(file);
+                }
+            }
+
+            loader.classList.add('hidden');
+            if (processedFiles.length > 0) zipBtn.classList.remove('hidden');
+        }
+
+        async function processPDF(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const page = await pdf.getPage(1);
+                
+                const textContent = await page.getTextContent();
+                let fullText = textContent.items.map(item => item.str).join(' ').replace(/\s+/g, ' ');
+
+                if (fullText.trim().length < 30) {
+                    const viewport = page.getViewport({ scale: 2.0 });
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    
+                    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+                    fullText = text.replace(/\s+/g, ' ');
+                }
+
+                // REGEX Logic
+                const orderRegex = /\d{2}-\d{5}-\d{2}-\d{2}/;
+                const foundOrder = fullText.match(orderRegex)?.[0] || "MISSING_ORDER";
+
+                const packingRegex = /\d{9,12}-\d{4,8}/;
+                let foundPacking = fullText.match(packingRegex)?.[0];
+
+                if (!foundPacking) {
+                    const longNumRegex = /26\d{7,15}/;
+                    foundPacking = fullText.match(longNumRegex)?.[0] || "MISSING_PACKING";
+                }
+
+                const newName = `${foundOrder} - ${foundPacking}.pdf`;
+                processedFiles.push({ blob: file, newName });
+
+                addTableRow(file.name, foundOrder, foundPacking, newName);
+
+            } catch (err) {
+                console.error(err);
+                addTableRow(file.name, "Error", "Error", "Processing Failed");
+            }
+        }
+
+        function addTableRow(original, order, packing, newName) {
+            const row = document.createElement('tr');
+            const isSuccess = !newName.includes("MISSING") && !newName.includes("Failed");
+            
+            row.className = "hover:bg-slate-800/30 transition-colors";
+            row.innerHTML = `
+                <td class="px-6 py-4 text-slate-500 text-[11px] truncate max-w-[120px]" title="${original}">${original}</td>
+                <td class="px-6 py-4 text-green-400 font-bold">${order}</td>
+                <td class="px-6 py-4 text-emerald-400 font-bold">${packing}</td>
+                <td class="px-6 py-4 font-black text-slate-200">${newName}</td>
+                <td class="px-6 py-4 text-center">
+                    ${isSuccess 
+                        ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20"><i data-lucide="check-circle" size="12"></i> SUCCESS</span>' 
+                        : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20"><i data-lucide="alert-circle" size="12"></i> REVIEW</span>'}
+                </td>
+            `;
+            resultBody.prepend(row);
+            lucide.createIcons();
+        }
+
+        zipBtn.addEventListener('click', async () => {
+            const zip = new JSZip();
+            processedFiles.forEach(f => zip.file(f.newName, f.blob));
+            const content = await zip.generateAsync({type:"blob"});
+            saveAs(content, `Hanwa_WOS_Rename_${new Date().getTime()}.zip`);
+        });
+    </script>
+</body>
+</html>
