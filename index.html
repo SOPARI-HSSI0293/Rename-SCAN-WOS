@@ -62,6 +62,31 @@
             <p class="text-slate-600 font-black tracking-[0.5em] text-lg">========================</p>
         </div>
 
+        <!-- Dashboard Stats -->
+        <div id="stats-panel" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="glass-card p-4 rounded-2xl border-l-4 border-green-500 flex items-center justify-between">
+                <div>
+                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Berhasil</p>
+                    <p id="stat-success" class="text-2xl font-black text-green-400">0</p>
+                </div>
+                <i data-lucide="check-circle" class="text-green-500/30" size="32"></i>
+            </div>
+            <div class="glass-card p-4 rounded-2xl border-l-4 border-amber-500 flex items-center justify-between">
+                <div>
+                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Cek Ulang</p>
+                    <p id="stat-review" class="text-2xl font-black text-amber-400">0</p>
+                </div>
+                <i data-lucide="alert-circle" class="text-amber-500/30" size="32"></i>
+            </div>
+            <div class="glass-card p-4 rounded-2xl border-l-4 border-blue-500 flex items-center justify-between">
+                <div>
+                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Persentase</p>
+                    <p id="stat-percent" class="text-2xl font-black text-blue-400">0%</p>
+                </div>
+                <i data-lucide="percent" class="text-blue-500/30" size="32"></i>
+            </div>
+        </div>
+
         <!-- Main Card Group -->
         <div class="grid grid-cols-1 gap-6">
             <!-- Drop Zone Card -->
@@ -76,11 +101,11 @@
                         <p class="text-slate-400 mt-1">Sistem akan mengekstrak Order No & Packing No (Full Format)</p>
                     </div>
                     
-                    <!-- Progress Loader - TEXT ENLARGED -->
+                    <!-- Progress Loader -->
                     <div id="loader" class="hidden flex flex-col items-center gap-4 w-full">
                         <div class="flex items-center gap-4 text-green-400 font-black bg-green-400/10 px-8 py-5 rounded-2xl border-2 border-green-500/30 shadow-2xl shadow-green-500/20">
                             <div class="animate-spin h-6 w-6 border-4 border-green-400 border-t-transparent rounded-full"></div>
-                            <span id="progress-text" class="text-xl md:text-2xl tracking-wide">Analysing Documents...</span>
+                            <span id="progress-text" class="text-xl md:text-2xl tracking-wide">Menganalisis Dokumen...</span>
                         </div>
                     </div>
                 </div>
@@ -127,7 +152,7 @@
         </div>
     </div>
 
-    <!-- Footer Attribution - TEXT DOWNSIZED & COLOR WHITE -->
+    <!-- Footer Attribution -->
     <footer class="mt-12 mb-8 text-center space-y-2">
         <div class="h-[1px] w-48 bg-gradient-to-r from-transparent via-slate-700 to-transparent mx-auto mb-4"></div>
         <p class="text-white text-[12px] md:text-[14px] tracking-widest font-bold uppercase italic opacity-80">
@@ -148,8 +173,17 @@
         const progressText = document.getElementById('progress-text');
         const zipBtn = document.getElementById('zip-btn');
         const clearBtn = document.getElementById('clear-btn');
+        
+        // Stats elements
+        const statsPanel = document.getElementById('stats-panel');
+        const statSuccess = document.getElementById('stat-success');
+        const statReview = document.getElementById('stat-review');
+        const statPercent = document.getElementById('stat-percent');
 
         let processedFiles = [];
+        let successCount = 0;
+        let reviewCount = 0;
+
         lucide.createIcons();
 
         dropZone.addEventListener('click', () => fileInput.click());
@@ -170,6 +204,7 @@
 
             document.getElementById('empty-state')?.remove();
             loader.classList.remove('hidden');
+            statsPanel.classList.remove('hidden');
 
             let count = 0;
             const total = pdfFiles.length;
@@ -178,6 +213,7 @@
                 count++;
                 progressText.innerText = `Memproses dokumen ke-${count} dari ${total}...`;
                 await processPDF(file);
+                updateStats();
             }
 
             loader.classList.add('hidden');
@@ -193,7 +229,6 @@
                 const textContent = await page.getTextContent();
                 let fullText = textContent.items.map(item => item.str).join(' ').replace(/\s+/g, ' ');
 
-                // OCR fallback if text extraction fails
                 if (fullText.trim().length < 30) {
                     const viewport = page.getViewport({ scale: 2.0 });
                     const canvas = document.createElement('canvas');
@@ -206,7 +241,6 @@
                     fullText = text.replace(/\s+/g, ' ');
                 }
 
-                // REGEX Logic based on Hanwa Document Structure
                 const orderRegex = /\d{2}-\d{5}-\d{2}-\d{2}/;
                 const foundOrder = fullText.match(orderRegex)?.[0] || "ORDER_TDK_DITEMUKAN";
 
@@ -221,18 +255,28 @@
                 const newName = `${foundOrder} - ${foundPacking}.pdf`;
                 processedFiles.push({ blob: file, newName });
 
-                addTableRow(file.name, foundOrder, foundPacking, newName);
+                const isSuccess = !newName.includes("TDK_DITEMUKAN");
+                if (isSuccess) successCount++; else reviewCount++;
+
+                addTableRow(file.name, foundOrder, foundPacking, newName, isSuccess);
 
             } catch (err) {
                 console.error(err);
-                addTableRow(file.name, "Error", "Error", "Gagal Memproses");
+                reviewCount++;
+                addTableRow(file.name, "Error", "Error", "Gagal Memproses", false);
             }
         }
 
-        function addTableRow(original, order, packing, newName) {
+        function updateStats() {
+            statSuccess.innerText = successCount;
+            statReview.innerText = reviewCount;
+            const total = successCount + reviewCount;
+            const percentage = total > 0 ? Math.round((successCount / total) * 100) : 0;
+            statPercent.innerText = `${percentage}%`;
+        }
+
+        function addTableRow(original, order, packing, newName, isSuccess) {
             const row = document.createElement('tr');
-            const isSuccess = !newName.includes("TDK_DITEMUKAN") && !newName.includes("Gagal");
-            
             row.className = "hover:bg-slate-800/30 transition-colors";
             row.innerHTML = `
                 <td class="px-6 py-4 text-slate-500 text-[10px] truncate max-w-[120px]" title="${original}">${original}</td>
