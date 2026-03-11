@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto-Rename PDF (Hanwa System)</title>
+    <title>Auto-Rename PDF (Hanwa System - Multi-Orientation)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -11,58 +11,60 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-        }
+        body { background-color: #0f172a; color: #f8fafc; }
         .glass-card {
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
-        #drop-zone.dragover {
-            border-color: #22c55e;
-            background: rgba(34, 197, 94, 0.1);
-        }
+        #drop-zone.dragover { border-color: #22c55e; background: rgba(34, 197, 94, 0.1); }
         .font-mono { font-family: 'ui-monospace', 'Cascadia Code', monospace; }
-        
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-
         .gradient-text-green {
             background: linear-gradient(to right, #4ade80, #22c55e);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .text-hanwa-green {
-            color: #22c55e;
+        /* Style Status Custom */
+        .status-pill {
+            display: inline-flex;
+            items-center: center;
+            gap: 8px;
+            padding: 4px 16px;
+            border-radius: 9999px;
+            font-weight: 800;
+            font-size: 10px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            border: 1px solid currentColor;
+        }
+        .status-berhasil {
+            background-color: rgba(34, 197, 94, 0.1);
+            color: #4ade80;
+            border-color: rgba(74, 222, 128, 0.3);
+        }
+        .status-manual {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #fbbf24;
+            border-color: rgba(251, 191, 36, 0.3);
         }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 flex flex-col">
 
-    <div class="max-w-5xl mx-auto w-full flex-grow space-y-8">
-        <!-- Header Section -->
+    <div class="max-w-5xl mx-auto w-full flex-grow space-y-8 pb-12">
         <div class="text-center space-y-2 pt-4 flex flex-col items-center">
-            <!-- Logo Hanwa -->
             <div class="mb-4">
                 <img src="https://deliveryhanwa.wordpress.com/wp-content/uploads/2025/11/logo-hanwa-2.png" 
-                     alt="Hanwa Logo" 
-                     class="h-20 w-auto object-contain brightness-110"
-                     onerror="this.style.display='none'">
+                     alt="Hanwa Logo" class="h-20 w-auto object-contain brightness-110">
             </div>
-            
-            <h1 class="text-4xl font-extrabold tracking-tight gradient-text-green">
-                RENAME SCAN WOS HANWA
-            </h1>
-            <p class="text-slate-600 font-black tracking-[0.5em] text-lg">========================</p>
+            <h1 class="text-4xl font-extrabold tracking-tight gradient-text-green">RENAME SCAN WOS HANWA</h1>
+            <p class="text-slate-600 font-black tracking-[0.5em] text-lg uppercase">===== K.26.03 =====</p>
         </div>
 
-        <!-- Dashboard Stats -->
         <div id="stats-panel" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4">
             <div class="glass-card p-4 rounded-2xl border-l-4 border-green-500 flex items-center justify-between">
                 <div>
@@ -76,75 +78,62 @@
                     <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Cek Ulang</p>
                     <p id="stat-review" class="text-2xl font-black text-amber-400">0</p>
                 </div>
-                <i data-lucide="alert-circle" class="text-amber-500/30" size="32"></i>
+                <i data-lucide="rotate-cw" class="text-amber-500/30" size="32"></i>
             </div>
             <div class="glass-card p-4 rounded-2xl border-l-4 border-blue-500 flex items-center justify-between">
                 <div>
-                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Persentase</p>
-                    <p id="stat-percent" class="text-2xl font-black text-blue-400">0%</p>
+                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Total File</p>
+                    <p id="stat-total" class="text-2xl font-black text-blue-400">0</p>
                 </div>
-                <i data-lucide="percent" class="text-blue-500/30" size="32"></i>
+                <i data-lucide="files" class="text-blue-500/30" size="32"></i>
             </div>
         </div>
 
-        <!-- Main Card Group -->
         <div class="grid grid-cols-1 gap-6">
-            <!-- Drop Zone Card -->
-            <div id="drop-zone" class="glass-card rounded-3xl p-10 border-2 border-dashed border-slate-700 transition-all cursor-pointer group relative overflow-hidden">
+            <div id="drop-zone" class="glass-card rounded-3xl p-10 border-2 border-dashed border-slate-700 transition-all cursor-pointer group relative overflow-hidden text-center">
                 <input type="file" id="file-input" class="hidden" multiple accept="application/pdf">
-                <div class="relative z-10 flex flex-col items-center space-y-6">
-                    <div class="bg-green-600/20 p-5 rounded-2xl text-green-400 group-hover:scale-110 transition-transform">
+                <div class="relative z-10 space-y-4">
+                    <div class="bg-green-600/20 p-5 rounded-2xl text-green-400 inline-block group-hover:scale-110 transition-transform">
                         <i data-lucide="upload-cloud" size="40"></i>
                     </div>
-                    <div class="text-center">
-                        <h3 class="text-xl font-bold text-slate-100 uppercase tracking-wider">Tarik Dokumen PDF ke Sini</h3>
-                        <p class="text-slate-400 mt-1">Sistem akan mengekstrak Order No & Packing No (Full Format)</p>
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-100 uppercase tracking-wider">Tarik PDF Ke Sini</h3>
+                        <p class="text-slate-400 mt-1 italic text-sm">Ucapkan Bismillah untuk hasil yang lebih baik</p>
                     </div>
-                    
-                    <!-- Progress Loader -->
-                    <div id="loader" class="hidden flex flex-col items-center gap-4 w-full">
-                        <div class="flex items-center gap-4 text-green-400 font-black bg-green-400/10 px-8 py-5 rounded-2xl border-2 border-green-500/30 shadow-2xl shadow-green-500/20">
-                            <div class="animate-spin h-6 w-6 border-4 border-green-400 border-t-transparent rounded-full"></div>
-                            <span id="progress-text" class="text-xl md:text-2xl tracking-wide">Menganalisis Dokumen...</span>
+                    <div id="loader" class="hidden">
+                        <div class="flex flex-col items-center justify-center gap-2 text-green-400 font-bold bg-green-400/10 px-8 py-6 rounded-2xl border-2 border-green-500/30">
+                            <div class="flex items-center gap-3">
+                                <div class="animate-spin h-5 w-5 border-4 border-green-400 border-t-transparent rounded-full"></div>
+                                <span id="progress-text" class="text-lg">Memproses...</span>
+                            </div>
+                            <span id="rotation-status" class="text-xs text-slate-400 uppercase tracking-tighter"></span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Table Card -->
             <div class="glass-card rounded-3xl overflow-hidden flex flex-col border border-slate-700">
                 <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
-                    <div class="flex items-center gap-3">
-                        <div class="p-2 bg-emerald-500/20 text-emerald-400 rounded-lg">
-                            <i data-lucide="layout-list" size="18"></i>
-                        </div>
-                        <h2 class="font-bold text-slate-200 tracking-wide uppercase text-xs">Daftar Hasil Rename</h2>
-                    </div>
-                    <div class="flex gap-3">
-                        <button id="clear-btn" class="text-[11px] font-bold text-slate-500 hover:text-red-400 transition-colors tracking-widest uppercase">Hapus Semua</button>
-                        <button id="zip-btn" class="hidden bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-green-900/20 transition-all active:scale-95">
+                    <h2 class="font-bold text-slate-200 uppercase text-xs tracking-widest">Daftar Hasil</h2>
+                    <div class="flex gap-4">
+                        <button id="clear-btn" class="text-[11px] font-bold text-slate-500 hover:text-red-400 uppercase tracking-widest">Bersihkan</button>
+                        <button id="zip-btn" class="hidden bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2">
                             <i data-lucide="download" size="14"></i> UNDUH ZIP
                         </button>
                     </div>
                 </div>
-
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-900/50 text-slate-500 uppercase text-[10px] font-bold tracking-widest border-b border-slate-700">
-                                <th class="px-6 py-4">Nama File Asli</th>
-                                <th class="px-6 py-4 text-green-400">Order No</th>
-                                <th class="px-6 py-4 text-emerald-400">Packing No (Lengkap)</th>
-                                <th class="px-6 py-4">Nama File Baru</th>
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-900/50 text-slate-500 uppercase text-[10px] font-bold border-b border-slate-700">
+                            <tr>
+                                <th class="px-6 py-4">Nama Asli</th>
+                                <th class="px-6 py-4 text-center">Order No</th>
+                                <th class="px-6 py-4 text-center">Packing No</th>
                                 <th class="px-6 py-4 text-center">Status</th>
                             </tr>
                         </thead>
-                        <tbody id="result-body" class="divide-y divide-slate-800 font-mono text-[12px]">
-                            <tr id="empty-state">
-                                <td colspan="5" class="px-6 py-16 text-center text-slate-500 italic font-sans">
-                                    Belum ada dokumen. Tarik file PDF untuk memulai.
-                                </td>
-                            </tr>
+                        <tbody id="result-body" class="divide-y divide-slate-800 font-mono text-[11px]">
+                            <tr id="empty-state"><td colspan="4" class="px-6 py-10 text-center text-slate-500 uppercase tracking-widest">Silahkan Drop File</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -152,15 +141,16 @@
         </div>
     </div>
 
-    <!-- Footer Attribution -->
-    <footer class="mt-12 mb-8 text-center space-y-2">
-        <div class="h-[1px] w-48 bg-gradient-to-r from-transparent via-slate-700 to-transparent mx-auto mb-4"></div>
-        <p class="text-white text-[12px] md:text-[14px] tracking-widest font-bold uppercase italic opacity-80">
-            RENAME SCAN WOS HANWA - Elaborated by SOPARI-HSSI0293
-        </p>
-        <p class="text-white text-[10px] md:text-[11px] font-medium tracking-[0.3em] opacity-60">
-            PT. HANWA STEEL SERVICE INDONESIA &copy; 2026
-        </p>
+    <!-- Footer Section Sesuai Gambar -->
+    <footer class="mt-auto py-8 text-center border-t border-slate-800/50">
+        <div class="space-y-2">
+            <h4 class="text-slate-300 font-bold text-sm tracking-[0.15em] uppercase">
+                RENAME SCAN WOS HANWA - ELABORATED BY SOPARI-HSSI0293
+            </h4>
+            <p class="text-slate-500 text-[10px] font-medium tracking-widest uppercase">
+                PT. HANWA STEEL SERVICE INDONESIA &copy; 2026
+            </p>
+        </div>
     </footer>
 
     <script>
@@ -171,14 +161,9 @@
         const resultBody = document.getElementById('result-body');
         const loader = document.getElementById('loader');
         const progressText = document.getElementById('progress-text');
+        const rotationStatus = document.getElementById('rotation-status');
         const zipBtn = document.getElementById('zip-btn');
-        const clearBtn = document.getElementById('clear-btn');
-        
-        // Stats elements
         const statsPanel = document.getElementById('stats-panel');
-        const statSuccess = document.getElementById('stat-success');
-        const statReview = document.getElementById('stat-review');
-        const statPercent = document.getElementById('stat-percent');
 
         let processedFiles = [];
         let successCount = 0;
@@ -186,17 +171,15 @@
 
         lucide.createIcons();
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-        dropZone.addEventListener('drop', (e) => {
+        dropZone.onclick = () => fileInput.click();
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+        dropZone.ondrop = (e) => {
             e.preventDefault();
             dropZone.classList.remove('dragover');
             handleFiles(e.dataTransfer.files);
-        });
-
-        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-        clearBtn.addEventListener('click', () => location.reload());
+        };
+        fileInput.onchange = (e) => handleFiles(e.target.files);
 
         async function handleFiles(files) {
             const pdfFiles = Array.from(files).filter(f => f.type === 'application/pdf');
@@ -206,13 +189,9 @@
             loader.classList.remove('hidden');
             statsPanel.classList.remove('hidden');
 
-            let count = 0;
-            const total = pdfFiles.length;
-
-            for (const file of pdfFiles) {
-                count++;
-                progressText.innerText = `Memproses dokumen ke-${count} dari ${total}...`;
-                await processPDF(file);
+            for (let i = 0; i < pdfFiles.length; i++) {
+                progressText.innerText = `Memproses ${i+1}/${pdfFiles.length}`;
+                await processPDF(pdfFiles[i]);
                 updateStats();
             }
 
@@ -226,79 +205,120 @@
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 const page = await pdf.getPage(1);
                 
+                let finalData = { order: null, packing: null };
+                const rotations = [0, 90, 270, 180];
+                
                 const textContent = await page.getTextContent();
-                let fullText = textContent.items.map(item => item.str).join(' ').replace(/\s+/g, ' ');
+                let rawText = textContent.items.map(item => item.str).join(' ');
+                finalData = extractData(rawText);
 
-                if (fullText.trim().length < 30) {
-                    const viewport = page.getViewport({ scale: 2.0 });
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
-                    await page.render({ canvasContext: ctx, viewport }).promise;
-                    
-                    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
-                    fullText = text.replace(/\s+/g, ' ');
+                if (!finalData.order || !finalData.packing) {
+                    for (const rot of rotations) {
+                        rotationStatus.innerText = `Mencoba Orientasi: ${rot}°...`;
+                        const canvas = await pageToCanvas(page, 2.0, rot);
+                        const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+                        const ocrData = extractData(text);
+                        
+                        if (ocrData.order) finalData.order = ocrData.order;
+                        if (ocrData.packing) finalData.packing = ocrData.packing;
+                        if (finalData.order && finalData.packing) break;
+                    }
                 }
 
-                const orderRegex = /\d{2}-\d{5}-\d{2}-\d{2}/;
-                const foundOrder = fullText.match(orderRegex)?.[0] || "ORDER_TDK_DITEMUKAN";
+                rotationStatus.innerText = "";
+                const finalOrder = finalData.order || "ORDER_TDK_DITEMUKAN";
+                const finalPacking = finalData.packing || "PACKING_TDK_DITEMUKAN";
+                const newName = `${finalOrder} - ${finalPacking}.pdf`;
+                const isSuccess = finalData.order && finalData.packing;
 
-                const packingRegex = /\d{9,12}-\d{4,8}/;
-                let foundPacking = fullText.match(packingRegex)?.[0];
-
-                if (!foundPacking) {
-                    const longNumRegex = /26\d{7,15}/;
-                    foundPacking = fullText.match(longNumRegex)?.[0] || "PACKING_TDK_DITEMUKAN";
-                }
-
-                const newName = `${foundOrder} - ${foundPacking}.pdf`;
-                processedFiles.push({ blob: file, newName });
-
-                const isSuccess = !newName.includes("TDK_DITEMUKAN");
                 if (isSuccess) successCount++; else reviewCount++;
-
-                addTableRow(file.name, foundOrder, foundPacking, newName, isSuccess);
+                
+                processedFiles.push({ blob: file, newName });
+                addTableRow(file.name, finalOrder, finalPacking, isSuccess);
 
             } catch (err) {
                 console.error(err);
                 reviewCount++;
-                addTableRow(file.name, "Error", "Error", "Gagal Memproses", false);
+                processedFiles.push({ blob: file, newName: `ERROR_${file.name}` });
+                addTableRow(file.name, "Error", "Error", false);
             }
         }
 
-        function updateStats() {
-            statSuccess.innerText = successCount;
-            statReview.innerText = reviewCount;
-            const total = successCount + reviewCount;
-            const percentage = total > 0 ? Math.round((successCount / total) * 100) : 0;
-            statPercent.innerText = `${percentage}%`;
+        async function pageToCanvas(page, scale, rotation) {
+            const viewport = page.getViewport({ scale: scale, rotation: rotation });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            return canvas;
         }
 
-        function addTableRow(original, order, packing, newName, isSuccess) {
+        function extractData(text) {
+            const cleanText = text.replace(/[\n\r\t]/g, ' ');
+            const orderRegex = /(\d{2}-\d{5}-\d{2}-\d{2})/;
+            const packingRegex = /(\d{9,12}-\d{4,8})/;
+            const fallbackPackingRegex = /(2[56]\d{10,18})/;
+
+            const orderMatch = cleanText.match(orderRegex);
+            const packingMatch = cleanText.match(packingRegex);
+            const fallbackMatch = cleanText.match(fallbackPackingRegex);
+
+            return { 
+                order: orderMatch ? orderMatch[0] : null, 
+                packing: packingMatch ? packingMatch[0] : (fallbackMatch ? fallbackMatch[0] : null)
+            };
+        }
+
+        function updateStats() {
+            document.getElementById('stat-success').innerText = successCount;
+            document.getElementById('stat-review').innerText = reviewCount;
+            document.getElementById('stat-total').innerText = processedFiles.length;
+        }
+
+        function addTableRow(original, order, packing, isSuccess) {
             const row = document.createElement('tr');
-            row.className = "hover:bg-slate-800/30 transition-colors";
+            row.className = "hover:bg-slate-800/30 transition-colors border-b border-slate-800";
+            
+            const statusClass = isSuccess ? 'status-berhasil' : 'status-manual';
+            const statusText = isSuccess ? 'Berhasil' : 'Cek Manual';
+            const statusIcon = isSuccess ? 'check-circle' : 'alert-circle';
+
             row.innerHTML = `
-                <td class="px-6 py-4 text-slate-500 text-[10px] truncate max-w-[120px]" title="${original}">${original}</td>
-                <td class="px-6 py-4 text-green-400 font-bold">${order}</td>
-                <td class="px-6 py-4 text-emerald-400 font-bold">${packing}</td>
-                <td class="px-6 py-4 font-black text-slate-100">${newName}</td>
+                <td class="px-6 py-4 text-slate-500 truncate max-w-[150px]">${original}</td>
+                <td class="px-6 py-4 text-center ${order.includes('TDK') ? 'text-amber-500/50' : 'text-green-400 font-bold'}">${order}</td>
+                <td class="px-6 py-4 text-center ${packing.includes('TDK') ? 'text-amber-500/50' : 'text-emerald-400 font-bold'}">${packing}</td>
                 <td class="px-6 py-4 text-center">
-                    ${isSuccess 
-                        ? '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]"><i data-lucide="check-circle" size="12"></i> BERHASIL</span>' 
-                        : '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20"><i data-lucide="alert-circle" size="12"></i> CEK ULANG</span>'}
+                    <div class="flex justify-center">
+                        <span class="status-pill ${statusClass}">
+                            <i data-lucide="${statusIcon}" size="12"></i>
+                            ${statusText}
+                        </span>
+                    </div>
                 </td>
             `;
             resultBody.prepend(row);
             lucide.createIcons();
         }
 
-        zipBtn.addEventListener('click', async () => {
+        zipBtn.onclick = async () => {
             const zip = new JSZip();
-            processedFiles.forEach(f => zip.file(f.newName, f.blob));
+            const counts = {};
+            processedFiles.forEach(f => {
+                let name = f.newName;
+                if (counts[name]) {
+                    counts[name]++;
+                    const parts = name.split('.');
+                    const ext = parts.pop();
+                    name = `${parts.join('.')}_${counts[name]}.${ext}`;
+                } else { counts[name] = 1; }
+                zip.file(name, f.blob);
+            });
             const content = await zip.generateAsync({type:"blob"});
-            saveAs(content, `Rename_WOS_Hanwa_${new Date().getTime()}.zip`);
-        });
+            saveAs(content, `Hanwa_Renamed_${new Date().toISOString().slice(0,10)}.zip`);
+        };
+
+        document.getElementById('clear-btn').onclick = () => location.reload();
     </script>
 </body>
 </html>
